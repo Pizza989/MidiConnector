@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from PyQt5.QtWidgets import QMainWindow, QApplication, QListWidget, QListWidgetItem, QPushButton, QPlainTextEdit, \
-    QLineEdit
+    QLineEdit, QComboBox, QStyle
 from PyQt5 import uic
 import sys
 import subprocess
@@ -78,7 +78,7 @@ class AConnectionHandler:
         subprocess.getoutput(f"aconnect {[_e for _e in params]}")
 
 
-class MidiDevice(QListWidgetItem):
+class MidiDevice(QListWidgetItem, QComboBox):
     def __init__(self, _id: int, name: str, args: str, _type: int, channels=None):
         super().__init__()
         # Setup class attributes
@@ -109,10 +109,12 @@ class UI(QMainWindow):
 
         # Load UI
         uic.loadUi("design/main.ui", self)
+        self.setStyleSheet("")
 
         # Init Components
         self.output_list_widget: QListWidget = self.findChild(QListWidget, "output_list_widget")
         self.input_list_widget: QListWidget = self.findChild(QListWidget, "input_list_widget")
+        self.inspector_list_widget: QListWidget = self.findChild(QListWidget, "inspector_list_widget")
 
         self.connectPushButton: QPushButton = self.findChild(QPushButton, "connectPushButton")
         self.disconnectPushButton: QPushButton = self.findChild(QPushButton, "disconnectPushButton")
@@ -131,18 +133,18 @@ class UI(QMainWindow):
         self.connectPushButton.clicked.connect(self.aconnect_connect)
         self.disconnectPushButton.clicked.connect(self.aconnect_disconnect)
 
-        self.output_list_widget.itemClicked.connect(self.register_output)
-        self.input_list_widget.itemClicked.connect(self.register_input)
+        self.output_list_widget.itemClicked.connect(self.select_output)
+        self.input_list_widget.itemClicked.connect(self.select_input)
 
         self.commandInput.returnPressed.connect(self.do_command_input)
 
         # Show window
         self.show()
 
-    def register_output(self, item):
+    def select_output(self, item):
         self.current_output = item
 
-    def register_input(self, item):
+    def select_input(self, item):
         self.current_input = item
 
     def aconnect_connect(self):
@@ -165,7 +167,8 @@ class UI(QMainWindow):
 
 
 if __name__ == '__main__':
-    # Run GUI
+    # Run App
     app = QApplication(sys.argv)
+    app.setStyleSheet("design/style/main.qss")
     ui = UI()
     sys.exit(app.exec())
