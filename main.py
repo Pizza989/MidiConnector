@@ -7,13 +7,16 @@ import sys
 from typing import List, Optional
 
 from PyQt5 import uic
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPainter, QPen
 from PyQt5.QtWidgets import QMainWindow, QApplication, QListWidget, QListWidgetItem, QPushButton, QPlainTextEdit, \
-    QLineEdit, QComboBox
+    QLineEdit, QComboBox, QStyleFactory, QDockWidget
+from PyQt5.uic.properties import QtGui
 
 
 class DeviceType:
-    output = 0
-    input = 1
+    input = 0
+    output = 1
 
 
 class AConnectionHandler:
@@ -105,7 +108,9 @@ class UI(QMainWindow):
 
         # Setup class Attributes
         self.current_output: Optional[MidiDevice] = None
+        self.current_output_channel = 0
         self.current_input: Optional[MidiDevice] = None
+        self.current_input_channel = 0
 
         # Load UI
         uic.loadUi("design/main.ui", self)
@@ -117,6 +122,8 @@ class UI(QMainWindow):
         self.output_list_widget: QListWidget = self.findChild(QListWidget, "output_list_widget")
         self.input_list_widget: QListWidget = self.findChild(QListWidget, "input_list_widget")
         self.inspector_list_widget: QListWidget = self.findChild(QListWidget, "inspector_list_widget")
+
+        self.inspect_dock: QDockWidget = self.findChild(QDockWidget, "inspectDock")
 
         self.connectPushButton: QPushButton = self.findChild(QPushButton, "connectPushButton")
         self.disconnectPushButton: QPushButton = self.findChild(QPushButton, "disconnectPushButton")
@@ -143,28 +150,44 @@ class UI(QMainWindow):
         # Show window
         self.show()
 
-    def select_output(self, item):
+    def select_output(self, item: MidiDevice):
+        self.inspector_list_widget.clear()
         self.current_output = item
+        self.inspect_dock.setWindowTitle(
+            f"Inspector - {self.current_output.name}: Output")
+        for _e in self.current_output.channels:
+            _build = QListWidgetItem()
+            _build.setText(f"{_e[0]}: {_e[1]}")
 
-    def select_input(self, item):
+            self.inspector_list_widget.addItem(_build)
+
+    def select_input(self, item: MidiDevice):
+        self.inspector_list_widget.clear()
         self.current_input = item
+        self.inspect_dock.setWindowTitle(
+            f"Inspector - {self.current_input.name}: Input")
+        for _e in self.current_input.channels:
+            _build = QListWidgetItem()
+            _build.setText(f"{_e[0]}: {_e[1]}")
+
+            self.inspector_list_widget.addItem(_build)
 
     def aconnect_connect(self):
         if self.current_input is None or self.current_output is None:
-            return self.commandOutput.insertPlainText(
+            return self.commandOutput.appendPlainText(
                 "Two Midi devices one Output one Input must be highlighted in the ConnectionPanel\n")
-        self.commandOutput.insertPlainText(
-            subprocess.getoutput(f"aconnect {self.current_input.id} {self.current_output.id}") + "\n")
+        _out = subprocess.getoutput(f"aconnect {self.current_input.id} {self.current_output.id}")
+        self.commandOutput.appendPlainText(_out + "\n" if _out else "")
 
     def aconnect_disconnect(self):
         if self.current_input is None or self.current_output is None:
-            return self.commandOutput.insertPlainText(
+            return self.commandOutput.appendPlainText(
                 "Two Midi devices one Output one Input must be highlighted in the ConnectionPanel\n")
-        self.commandOutput.insertPlainText(
-            subprocess.getoutput(f"aconnect -d {self.current_input.id} {self.current_output.id}") + "\n")
+        _out = subprocess.getoutput(f"aconnect -d {self.current_input.id} {self.current_output.id}")
+        self.commandOutput.appendPlainText(_out + "\n" if _out else "")
 
     def do_command_input(self):
-        self.commandOutput.insertPlainText(subprocess.getoutput(self.commandInput.text()) + "\n")
+        self.commandOutput.appendPlainText(subprocess.getoutput(self.commandInput.text()))
         self.commandInput.clear()
 
 
