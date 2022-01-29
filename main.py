@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from typing import List, Optional
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QListWidget, QListWidgetItem, QPushButton, QPlainTextEdit, \
-    QLineEdit, QComboBox, QStyle
 from PyQt5 import uic
-import sys
-import subprocess
+from PyQt5.QtWidgets import QMainWindow, QApplication, QListWidget, QListWidgetItem, QPushButton, QPlainTextEdit, \
+    QLineEdit, QComboBox
 
 
 class DeviceType:
@@ -109,7 +109,9 @@ class UI(QMainWindow):
 
         # Load UI
         uic.loadUi("design/main.ui", self)
-        self.setStyleSheet("")
+        _style_sheet = ""
+        with open("design/style/main.qss", "r") as file:
+            self.setStyleSheet("".join(file.readlines()))
 
         # Init Components
         self.output_list_widget: QListWidget = self.findChild(QListWidget, "output_list_widget")
@@ -169,6 +171,5 @@ class UI(QMainWindow):
 if __name__ == '__main__':
     # Run App
     app = QApplication(sys.argv)
-    app.setStyleSheet("design/style/main.qss")
     ui = UI()
     sys.exit(app.exec())
