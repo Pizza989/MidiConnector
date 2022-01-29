@@ -1,0 +1,2 @@
+# MidiConnector
+GUI for aconnect
