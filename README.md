@@ -1,2 +1,2 @@
 # MidiConnector
-GUI for aconnect
+GUI for aconnect WIP
