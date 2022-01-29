@@ -79,6 +79,13 @@
            <enum>QFrame::Raised</enum>
           </property>
           <layout class="QGridLayout" name="gridLayout_3">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_2">
+             <property name="text">
+              <string>OutputDevices</string>
+             </property>
+            </widget>
+           </item>
            <item row="1" column="0">
             <widget class="QListWidget" name="output_list_widget">
              <property name="styleSheet">
@@ -95,13 +102,6 @@
              </property>
              <property name="dragDropMode">
               <enum>QAbstractItemView::NoDragDrop</enum>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_2">
-             <property name="text">
-              <string>OutputDevices</string>
              </property>
             </widget>
            </item>
@@ -185,6 +185,7 @@
     <property name="title">
      <string>Tools</string>
     </property>
+    <addaction name="actionConnect"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuTools"/>
@@ -199,15 +200,15 @@
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_3">
     <layout class="QGridLayout" name="gridLayout">
+     <item row="1" column="0">
+      <widget class="QLineEdit" name="commandInput"/>
+     </item>
      <item row="0" column="0">
       <widget class="QPlainTextEdit" name="commandOutput">
        <property name="enabled">
         <bool>true</bool>
        </property>
       </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLineEdit" name="commandInput"/>
      </item>
     </layout>
    </widget>
@@ -249,6 +250,11 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actionConnect">
+   <property name="text">
+    <string>Connect</string>
    </property>
   </action>
  </widget>

@@ -2,3 +2,9 @@ QMainWindow
 {
     color: rgb(255, 255, 255);
 }
+
+QListView::item
+{
+	height: 42px;
+}
+

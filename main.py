@@ -81,7 +81,19 @@ class AConnectionHandler:
         subprocess.getoutput(f"aconnect {[_e for _e in params]}")
 
 
-class MidiDevice(QListWidgetItem, QComboBox):
+class Channel(QListWidgetItem):
+    def __init__(self, _id: int, text: str, parent: MidiDevice):
+        super().__init__()
+        self.id = _id
+        self.text = text
+        self.parent = parent
+
+        self.setText(f"{self.id}: {self.text}")
+        self.setToolTip(
+            f"Device: {self.parent.name}, Type: {'Output' if self.parent.type == DeviceType.output else 'Input'}")
+
+
+class MidiDevice(QListWidgetItem):
     def __init__(self, _id: int, name: str, args: str, _type: int, channels=None):
         super().__init__()
         # Setup class attributes
@@ -112,7 +124,9 @@ class UI(QMainWindow):
         self.current_input: Optional[MidiDevice] = None
         self.current_input_channel = 0
 
-        # Load UI
+        self.editing_output = False
+
+        # Load ui and style
         uic.loadUi("design/main.ui", self)
         _style_sheet = ""
         with open("design/style/main.qss", "r") as file:
@@ -144,11 +158,18 @@ class UI(QMainWindow):
 
         self.output_list_widget.itemClicked.connect(self.select_output)
         self.input_list_widget.itemClicked.connect(self.select_input)
+        self.inspector_list_widget.itemClicked.connect(self.select_channel)
 
         self.commandInput.returnPressed.connect(self.do_command_input)
 
         # Show window
         self.show()
+
+    def select_channel(self, item: Channel):
+        if self.editing_output:
+            self.current_output_channel = item.id
+        else:
+            self.current_input_channel = item.id
 
     def select_output(self, item: MidiDevice):
         self.inspector_list_widget.clear()
@@ -156,10 +177,11 @@ class UI(QMainWindow):
         self.inspect_dock.setWindowTitle(
             f"Inspector - {self.current_output.name}: Output")
         for _e in self.current_output.channels:
-            _build = QListWidgetItem()
-            _build.setText(f"{_e[0]}: {_e[1]}")
+            _build = Channel(_e[0], _e[1], item)
 
             self.inspector_list_widget.addItem(_build)
+
+        self.editing_output = True
 
     def select_input(self, item: MidiDevice):
         self.inspector_list_widget.clear()
@@ -167,23 +189,27 @@ class UI(QMainWindow):
         self.inspect_dock.setWindowTitle(
             f"Inspector - {self.current_input.name}: Input")
         for _e in self.current_input.channels:
-            _build = QListWidgetItem()
-            _build.setText(f"{_e[0]}: {_e[1]}")
+            _build = Channel(_e[0], _e[1], item)
 
             self.inspector_list_widget.addItem(_build)
+
+        self.editing_output = False
 
     def aconnect_connect(self):
         if self.current_input is None or self.current_output is None:
             return self.commandOutput.appendPlainText(
-                "Two Midi devices one Output one Input must be highlighted in the ConnectionPanel\n")
-        _out = subprocess.getoutput(f"aconnect {self.current_input.id} {self.current_output.id}")
+                "You'll need to select an output and an input device be trying to connect something\n")
+        _out = subprocess.getoutput(
+            f"aconnect {self.current_input.id}:{self.current_input_channel} "
+            f"{self.current_output.id}:{self.current_output_channel}")
         self.commandOutput.appendPlainText(_out + "\n" if _out else "")
 
     def aconnect_disconnect(self):
         if self.current_input is None or self.current_output is None:
             return self.commandOutput.appendPlainText(
-                "Two Midi devices one Output one Input must be highlighted in the ConnectionPanel\n")
-        _out = subprocess.getoutput(f"aconnect -d {self.current_input.id} {self.current_output.id}")
+                "You'll need to select an output and an input device be trying to connect something\n")
+        _out = subprocess.getoutput(
+            f"aconnect -d {self.current_input.id}:{self.current_input_channel} {self.current_output.id}:{self.current_output_channel}")
         self.commandOutput.appendPlainText(_out + "\n" if _out else "")
 
     def do_command_input(self):
