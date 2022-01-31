@@ -11,7 +11,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QPen
 from PyQt5.QtWidgets import QMainWindow, QApplication, QListWidget, QListWidgetItem, QPushButton, QPlainTextEdit, \
     QLineEdit, QComboBox, QStyleFactory, QDockWidget
-from PyQt5.uic.properties import QtGui
 
 
 class DeviceType:
@@ -20,43 +19,41 @@ class DeviceType:
 
 
 class AConnectionHandler:
+
     @classmethod
     def parse_device_list(cls, param: str) -> list:
-        """
+        _stdout = subprocess.getoutput(
+            "export LANG=en_EN.UTF-8; aconnect -l")  # make sure the output is a certain language
 
-        :param param: either _i or o for input/output
-        :return:
-        """
-        _out = []
+        # For some reason aconnect uses \t and spaces to indent lines
+        _stdout = _stdout.replace("    ", "\t")
 
-        _stdout = subprocess.getoutput(f"aconnect -{param}").split("client ")
-        del _stdout[0]
+        _curr_client: list = []
+        _curr_channel: list = []
+        _out: list = []
 
-        for device in _stdout:
-            _dump = device.splitlines()
+        for _line in _stdout.splitlines():
+            if _line.startswith("client"):  # if a client is declared
+                if _curr_client:  # if current client is finished
+                    _out.append(_curr_client)
+                _curr_client = [_line.replace("client ", "").replace(":", "").replace(" ", "").split("'"),
+                                []]  # parse a client
+                continue
+            elif _line.replace("\t", "").split()[0].replace(" ", "").isdigit():  # if a channel is declared
+                _channel = _line.replace("\t", "").replace(" ", "").split("'")  # parse a channel
+                del _channel[2]
+                _curr_channel = _channel
+                _curr_client[1].append(_channel)
+                continue
+            elif _line.startswith("\t"):  # if a connection is declared
+                if _line.startswith("	Connected From: "):
+                    _conn = [_line.replace("	Connected From: ", "").split(":"), DeviceType.input]
+                    _curr_channel.append(_conn)
+                elif _line.startswith("	Connecting To: "):
+                    _conn = [_line.replace("	Connecting To: ", "").split(":"), DeviceType.output]
+                    _curr_channel.append(_conn)
 
-            # Construct List[device_id, device_name, device_args]
-            _dump = [each.replace(" ", "") for each in _dump]
-            _temp = _dump[0].split(":")
-            _temp.extend(_temp[1].split("'"))
-            del _temp[1], _temp[1], _dump[0]
-            _dump.insert(0,
-                         _temp)  # Where does the type error come from
-            # PycharmCE2021.2 on linux, python 3.9, standard settings
-
-            # Construct Lists[channel_id, channel_str]
-            _temp_next = []
-            for _i in range(1, len(_dump)):
-                _temp = _dump[_i].split("'")
-                del _temp[-1]
-                _temp_next.append(_temp)
-
-            for _i in range(1, len(_dump)):
-                del _dump[-1]
-
-            _dump.append(_temp_next)
-
-            _out.append(_dump)
+        _out.append(_curr_client)  # Also append if there is no new client coming afterwards
 
         return _out
 
@@ -139,8 +136,9 @@ class UI(QMainWindow):
 
         self.inspect_dock: QDockWidget = self.findChild(QDockWidget, "inspectDock")
 
-        self.connectPushButton: QPushButton = self.findChild(QPushButton, "connectPushButton")
-        self.disconnectPushButton: QPushButton = self.findChild(QPushButton, "disconnectPushButton")
+        self.connect_push_button: QPushButton = self.findChild(QPushButton, "connectPushButton")
+        self.disconnect_push_button: QPushButton = self.findChild(QPushButton, "disconnectPushButton")
+        self.disconnect_all_push_button: QPushButton = self.findChild(QPushButton, "disconnectAllButton")
 
         self.commandOutput: QPlainTextEdit = self.findChild(QPlainTextEdit, "commandOutput")
         self.commandInput: QLineEdit = self.findChild(QLineEdit, "commandInput")
@@ -148,13 +146,15 @@ class UI(QMainWindow):
         # Init AConnection
         input_devices = AConnectionHandler.get_input_devices()
         output_devices = AConnectionHandler.get_output_devices()
+        print(AConnectionHandler.parse_device_list("-i"))
 
         # Main Setup
         [self.output_list_widget.addItem(e) for e in output_devices]
         [self.input_list_widget.addItem(e) for e in input_devices]
 
-        self.connectPushButton.clicked.connect(self.aconnect_connect)
-        self.disconnectPushButton.clicked.connect(self.aconnect_disconnect)
+        self.connect_push_button.clicked.connect(self.aconnect_connect)
+        self.disconnect_push_button.clicked.connect(self.aconnect_disconnect)
+        self.disconnect_all_push_button.clicked.connect(self.aconnect_disconnect_all)
 
         self.output_list_widget.itemClicked.connect(self.select_output)
         self.input_list_widget.itemClicked.connect(self.select_input)
@@ -209,7 +209,12 @@ class UI(QMainWindow):
             return self.commandOutput.appendPlainText(
                 "You'll need to select an output and an input device be trying to connect something\n")
         _out = subprocess.getoutput(
-            f"aconnect -d {self.current_input.id}:{self.current_input_channel} {self.current_output.id}:{self.current_output_channel}")
+            f"aconnect -d {self.current_input.id}:{self.current_input_channel}"
+            f" {self.current_output.id}:{self.current_output_channel}")
+        self.commandOutput.appendPlainText(_out + "\n" if _out else "")
+
+    def aconnect_disconnect_all(self):
+        _out = subprocess.getoutput(f"aconnect -x")
         self.commandOutput.appendPlainText(_out + "\n" if _out else "")
 
     def do_command_input(self):
