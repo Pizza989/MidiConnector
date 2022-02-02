@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1091</width>
-    <height>798</height>
+    <width>1369</width>
+    <height>821</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,12 +20,15 @@
    <number>0</number>
   </property>
   <property name="styleSheet">
-   <string notr="true">alternate-background-color: rgb(110, 74, 255);</string>
+   <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_5">
     <item row="0" column="0">
      <widget class="QTabWidget" name="connectionTab">
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
       <property name="tabShape">
        <enum>QTabWidget::Rounded</enum>
       </property>
@@ -134,7 +137,7 @@
           <property name="styleSheet">
            <string notr="true">QFrame
 {
-border: nony;
+border: none;
 }
 </string>
           </property>
@@ -184,6 +187,11 @@ border: nony;
        <attribute name="title">
         <string>Connections</string>
        </attribute>
+       <layout class="QGridLayout" name="gridLayout_7">
+        <item row="0" column="0">
+         <widget class="QGraphicsView" name="connectionsPanel"/>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>
@@ -194,7 +202,7 @@ border: nony;
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1091</width>
+     <width>1369</width>
      <height>30</height>
     </rect>
    </property>
