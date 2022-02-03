@@ -2,3 +2,14 @@ QListView::item
 {
 	height: 42px;
 }
+
+QLabel
+{
+    background-color: transparent;
+    color: rgb(255, 0, 0);
+}
+QLabel:hover
+{
+    background-color: rgb(25, 25, 25);
+
+}

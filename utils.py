@@ -1,20 +1,33 @@
 import math
 import subprocess
+import typing
 from typing import List
 
-from PyQt5.QtCore import QLine, Qt, QEvent
-from PyQt5.QtGui import QColor, QPen, QMouseEvent
-from PyQt5.QtWidgets import QWidget, QListWidgetItem, QMainWindow, QGraphicsItem, QGraphicsScene, QGraphicsView, \
-    QGraphicsSceneMouseEvent
+from PyQt5.QtCore import QLine, Qt, QEvent, QRectF, QRect
+from PyQt5.QtGui import QColor, QPen, QMouseEvent, QPainter, QPainterPath, QFont, QBrush
+from PyQt5.QtWidgets import QWidget, QListWidgetItem, QGraphicsItem, QGraphicsScene, QGraphicsView, \
+    QFrame, QVBoxLayout, QGraphicsTextItem, QStyleOptionGraphicsItem, \
+    QGraphicsProxyWidget, QLabel, QHBoxLayout, QSizePolicy, QRadioButton, QSpacerItem
+from PyQt5.uic.Compiler.qtproxies import QtGui
 
 
 class DeviceType:
     input = 0
     output = 1
 
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        if self.value == DeviceType.input:
+            return "Input"
+        elif self.value == DeviceType.output:
+            return "Output"
+        else:
+            raise ValueError("DeviceType's value must always be in range [0, 1] - Input/Output")
+
 
 class AConnectionHandler:
-
     @classmethod
     def parse_device_list(cls, param: str) -> list:
         _stdout = subprocess.getoutput(
@@ -33,23 +46,28 @@ class AConnectionHandler:
                     _out.append(_curr_client)
                 _curr_client = [_line.replace("client ", "").replace(":", "").replace(" ", "").split("'"),
                                 []]  # parse a client
+                _curr_client[0][0] = int(_curr_client[0][0])
                 continue
             elif _line.replace("\t", "").split()[0].replace(" ", "").isdigit():  # if a channel is declared
                 _channel = _line.replace("\t", "").replace(" ", "").split("'")  # parse a channel
                 del _channel[2]
                 _curr_channel = _channel
+                _curr_channel[0] = int(_curr_channel[0])
                 _curr_client[1].append(_channel)
                 continue
             elif _line.startswith("\t"):  # if a connection is declared
                 if _line.startswith("	Connected From: "):
-                    _conn = [_line.replace("	Connected From: ", "").split(":"), DeviceType.input]
-                    _curr_channel.append(_conn)
+                    _temp = _line.replace("	Connected From: ", "").replace(" ", "").split(",")
+                    _conns = [_conn.split(":") for _conn in _temp]
+                    _conns = [[int(_conn[0]), int(_conn[1]), DeviceType.input] for _conn in _conns]
+                    _curr_channel.append(_conns)
                 elif _line.startswith("	Connecting To: "):
-                    _conn = [_line.replace("	Connecting To: ", "").split(":"), DeviceType.output]
-                    _curr_channel.append(_conn)
+                    _temp = _line.replace("	Connecting To: ", "").replace(" ", "").split(",")
+                    _conns = [_conn.split(":") for _conn in _temp]
+                    _conns = [[int(_conn[0]), int(_conn[1]), DeviceType.output] for _conn in _conns]
+                    _curr_channel.append(_conns)
 
         _out.append(_curr_client)  # Also append if there is no new client coming afterwards
-
         return _out
 
     @classmethod
@@ -66,26 +84,23 @@ class AConnectionHandler:
 
     @classmethod
     def get_connections(cls):
-        _dev_list = cls.parse_device_list("l")
-
-    @classmethod
-    def set_connection(cls, _in: "MidiDevice", _out: "MidiDevice", params: List[str]):
-        subprocess.getoutput(f"aconnect {[_e for _e in params]}")
-
-
-class Channel(QListWidgetItem):
-    def __init__(self, _id: int, text: str, parent: "MidiDevice"):
-        super().__init__()
-        self.id = _id
-        self.text = text
-        self.parent = parent
-
-        self.setText(f"{self.id}: {self.text}")
-        self.setToolTip(
-            f"Device: {self.parent.name}, Type: {'Output' if self.parent.type == DeviceType.output else 'Input'}")
+        _temp = []
+        _out = []
+        _curr_dev_id = 0
+        _curr_ch_id = 0
+        for _dev in cls.parse_device_list("l"):
+            _curr_dev_id = _dev[0][0]
+            for _channel in _dev[1]:
+                _curr_ch_id = _channel[0]
+                if len(_channel) == 3:
+                    for _conn in _channel[2]:
+                        if _conn[2] == DeviceType.input:  # Only outputting connections should be at index 0
+                            continue
+                        _out.append([[_curr_dev_id, _curr_ch_id], [_conn[0], _conn[1]]])  # [[From where], [to where]]
+        return _out
 
 
-class MidiDevice(QListWidgetItem):
+class MidiDevice:
     def __init__(self, _id: int, name: str, args: str, _type: int, channels=None):
         super().__init__()
         # Setup class attributes
@@ -94,54 +109,79 @@ class MidiDevice(QListWidgetItem):
         self.id = _id
         self.name = name
         self.args = args
-        self.type = _type
+        self.type = DeviceType(_type)
 
         self.channels = channels
-
-        self.setText(self.name)
-        self.setToolTip(self.__repr__())
 
     def __repr__(self):
         return f"{self.id}: {self.name}, Args: {self.args}, Channels: {self.channels}, Type: {self.type}"
 
 
-class MidiDeviceItem(QGraphicsItem):
-    def __init__(self, device: MidiDevice):
-        super().__init__()
-        self._device = device
-        self.id = device.id
-        self.name = device.name
-        self.args = device.args
-        self.type = device.type
-
-        self.channel = device.channels
-
-        self.setToolTip(self.__repr__())
-        self.setFlag(QGraphicsItem.ItemIsMovable)
-
-    def __repr__(self):
-        return self._device.__repr__()
-
-
-class DevicePopUp(QWidget):
-    def __init__(self, device: MidiDevice, win: QMainWindow):
-        super().__init__(win)
-        self.win = win
-        self.device = device
-        self.setStyleSheet("	background-color: rgb(255, 0, 0); border: 2px;")
-
-        self.setWindowTitle(self.device.name)
-        self.setToolTip(self.device.__repr__())
-
-
 class QDMNodeEditor(QGraphicsView):
-    @classmethod
-    def from_graphics_view(cls, graphics_view: QGraphicsView):
-        # This will be enough for now
-        super().setGeometry(graphics_view.geometry())
-        super().setToolTip(graphics_view.toolTip())
-        super().setParent(graphics_view.parentWidget())
-        return cls
+    def __init__(self, place_holder: QFrame, node_scene: "QDMNodeEditorScene", main_class):
+        super().__init__()
+        place_holder.setLayout(QVBoxLayout())
+        place_holder.layout().addWidget(self)
+
+        self.scene = node_scene
+        self.main_class = main_class
+
+        self.setScene(self.scene)
+        self.setRenderHints(
+            QPainter.Antialiasing | QPainter.HighQualityAntialiasing | QPainter.TextAntialiasing |
+            QPainter.SmoothPixmapTransform)
+
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            self.middleMouseButtonPress(event)
+        elif event.button() == Qt.LeftButton:
+            self.rightMouseButtonPress(event)
+        elif event.button() == Qt.RightButton:
+            self.rightMouseButtonPress(event)
+        else:
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            self.middleMouseButtonRelease(event)
+        elif event.button() == Qt.LeftButton:
+            self.leftMouseButtonRelease(event)
+        elif event.button() == Qt.RightButton:
+            self.rightMouseButtonRelease(event)
+        else:
+            super().mouseReleaseEvent(event)
+
+    def middleMouseButtonPress(self, event):
+        releaseEvent = QMouseEvent(QEvent.MouseButtonRelease, event.localPos(), event.screenPos(),
+                                   Qt.LeftButton, Qt.NoButton, event.modifiers())
+        super().mouseReleaseEvent(releaseEvent)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        fakeEvent = QMouseEvent(event.type(), event.localPos(), event.screenPos(),
+                                Qt.LeftButton, event.buttons() | Qt.LeftButton, event.modifiers())
+        super().mousePressEvent(fakeEvent)
+
+    def middleMouseButtonRelease(self, event):
+        fakeEvent = QMouseEvent(event.type(), event.localPos(), event.screenPos(),
+                                Qt.LeftButton, event.buttons() & ~Qt.LeftButton, event.modifiers())
+        super().mouseReleaseEvent(fakeEvent)
+        self.setDragMode(QGraphicsView.NoDrag)
+
+    def leftMouseButtonPress(self, event):
+        return super().mousePressEvent(event)
+
+    def leftMouseButtonRelease(self, event):
+        return super().mouseReleaseEvent(event)
+
+    def rightMouseButtonPress(self, event):
+        return super().mousePressEvent(event)
+
+    def rightMouseButtonRelease(self, event):
+        return super().mouseReleaseEvent(event)
 
 
 class QDMNodeEditorScene(QGraphicsScene):
@@ -152,9 +192,9 @@ class QDMNodeEditorScene(QGraphicsScene):
         self.grid_size = grid_size
         self.grid_squares = grid_squares
 
-        self._color_background = QColor("#393939")
+        self._color_background = QColor("#31363b")
         self._color_light = QColor("#2f2f2f")
-        self._color_dark = QColor("#292929")
+        self._color_dark = QColor("#232629")
 
         self._pen_light = QPen(self._color_light)
         self._pen_light.setWidth(1)
@@ -162,8 +202,8 @@ class QDMNodeEditorScene(QGraphicsScene):
         self._pen_dark.setWidth(2)
 
         self.scene_width, self.scene_height = 64000, 64000
-        self.setSceneRect(-self.scene_width // 2, -self.scene_height // 2, self.scene_width, self.scene_height)
 
+        self.setSceneRect(-self.scene_width // 2, -self.scene_height // 2, self.scene_width, self.scene_height)
         self.setBackgroundBrush(self._color_background)
 
     def drawBackground(self, painter, rect):
@@ -195,3 +235,188 @@ class QDMNodeEditorScene(QGraphicsScene):
 
         painter.setPen(self._pen_dark)
         painter.drawLines(*lines_dark)
+
+
+class QDMGraphicsSocket(QGraphicsItem):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.radius = 6.0
+        self.outline_width = 1.0
+        self._color_background = QColor("#FFFF7700")
+        self._color_outline = QColor("#FF000000")
+
+        self._pen = QPen(self._color_outline)
+        self._pen.setWidthF(self.outline_width)
+        self._brush = QBrush(self._color_background)
+
+    def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionGraphicsItem',
+              widget: typing.Optional[QWidget] = ...) -> None:
+        # painting circle
+        painter.setBrush(self._brush)
+        painter.setPen(self._pen)
+        painter.drawEllipse(-self.radius, -self.radius, 2 * self.radius, 2 * self.radius)
+
+    def boundingRect(self):
+        return QRectF(
+            - self.radius - self.outline_width,
+            - self.radius - self.outline_width,
+            2 * (self.radius + self.outline_width),
+            2 * (self.radius + self.outline_width),
+        )
+
+
+class QDMChannelWidget(QWidget):
+    def __init__(self, x, y, width, height, channel, node: "Node"):
+        super().__init__()
+        super().setStyleSheet("background-color: transparent;")
+
+        self.channel = channel
+        self.node = node
+
+        self.setLayout(QHBoxLayout())
+
+        self.text: QLabel = QLabel(f"{self.channel[0]}: {self.channel[1]}")
+        self.text.setFont(QFont("Ubuntu", 10))
+        self.text.setGeometry(self.node.width, self.node.channel_height, 0, 0)
+
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.layout().addWidget(self.text)
+
+        self.spacer = QSpacerItem(1, QSizePolicy.MinimumExpanding)
+        self.layout().addItem(self.spacer)
+        self.socket_button = QRadioButton()
+
+        self.layout().addWidget(self.socket_button)
+
+        self.setGeometry(x, y, width, height)
+
+
+class QDMNodeContentWidget(QWidget):
+    def __init__(self, node: "Node"):
+        super().__init__()
+        super().setStyleSheet("background-color: transparent")
+
+        self.node = node
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(0, 0, 0, 0)
+
+        self.init_ui()
+
+    def init_ui(self):
+        _i = 0
+        for _each in self.node.device.channels:
+            _y = _i * self.node.channel_height + self.node.title_height
+            self.layout().addWidget(
+                QDMChannelWidget(self.node.padding, self.node.padding + _i * self.node.channel_height, self.node.width,
+                                 _y,
+                                 _each, self.node))
+            _i += 1
+
+
+class Node(QGraphicsItem):
+    def __init__(self, device: MidiDevice, parent: QDMNodeEditor):
+        super().__init__()
+
+        self._title_color = Qt.white
+        self._title_font = QFont("Ubuntu", 10)
+
+        # Will be dynamically set in paint method
+        self.width = 0
+        self.height = 0
+        self.base_width = 180
+        self.base_height = 25
+        self.channel_height = 25
+        self.edge_size = 10.0
+        self.title_height = 24.0
+        self.padding = 4.0
+
+        self._pen_default = QPen(QColor("#7F000000"))
+        self._pen_selected = QPen(QColor("#999999"))
+
+        self._brush_title = QBrush(QColor("#FF313131"))
+        self._brush_background = QBrush(QColor("#E3212121"))
+
+        self.title = QGraphicsTextItem(self)
+        self.channels_text_objects = []
+        self.socket_positions = []
+        self.gr_content = QGraphicsProxyWidget(self)
+
+        self.device = device
+        self.parent = parent
+
+        self.init_title()
+        self.init_contents()
+
+        self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsFocusable)
+
+    def boundingRect(self):
+        return QRectF(
+            0,
+            0,
+            2 * self.edge_size + self.width,
+            2 * self.edge_size + self.height
+        ).normalized()
+
+    def init_title(self):
+        self.title.setDefaultTextColor(self._title_color)
+        self.title.setFont(self._title_font)
+        self.title.setPos(self.padding, 0)
+        self.title.setTextWidth(
+            self.width
+            - 2 * self.padding
+        )
+        self.title.setPlainText(f"{self.device.name} - {self.device.type}")
+
+    def init_contents(self):
+        """
+            _i = 0
+            for _each in self.device.channels:
+            _y = _i * self.channel_height + self.title_height
+            _temp = QGraphicsTextItem(self)
+            _temp.setPlainText(f"{_each[0]}: {_each[1]}")
+
+            _temp.setY(_y)
+            self.channels_text_objects.append(_temp)
+            self.socket_positions.append([self.x() + self.width, _y])
+            _i += 1
+
+        """
+        self.gr_content.setWidget(QDMNodeContentWidget(self))
+        self.gr_content.setPos(self.padding, self.title_height + self.padding)
+
+    def paint(self, painter, q_style_option_graphics_item, widget=None):
+        # set values
+        self.height = len(self.device.channels) * self.channel_height + self.base_height
+        self.width = self.title.textWidth() + self.padding + self.base_width
+
+        # draw sockets
+
+        # title
+        path_title = QPainterPath()
+        path_title.setFillRule(Qt.WindingFill)
+        path_title.addRoundedRect(0, 0, self.width, self.title_height, self.edge_size, self.edge_size)
+        path_title.addRect(0, self.title_height - self.edge_size, self.edge_size, self.edge_size)
+        path_title.addRect(self.width - self.edge_size, self.title_height - self.edge_size, self.edge_size,
+                           self.edge_size)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self._brush_title)
+        painter.drawPath(path_title.simplified())
+
+        # content
+        path_content = QPainterPath()
+        path_content.setFillRule(Qt.WindingFill)
+        path_content.addRoundedRect(0, self.title_height, self.width, self.height - self.title_height, self.edge_size,
+                                    self.edge_size)
+        path_content.addRect(0, self.title_height, self.edge_size, self.edge_size)
+        path_content.addRect(self.width - self.edge_size, self.title_height, self.edge_size, self.edge_size)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self._brush_background)
+        painter.drawPath(path_content.simplified())
+
+        # outline
+        path_outline = QPainterPath()
+        path_outline.addRoundedRect(0, 0, self.width, self.height, self.edge_size, self.edge_size)
+        painter.setPen(self._pen_default if not self.isSelected() else self._pen_selected)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path_outline.simplified())

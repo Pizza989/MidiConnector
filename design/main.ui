@@ -25,7 +25,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_5">
     <item row="0" column="0">
-     <widget class="QTabWidget" name="connectionTab">
+     <widget class="QTabWidget" name="connectionTabWidget">
       <property name="styleSheet">
        <string notr="true"/>
       </property>
@@ -189,7 +189,22 @@ border: none;
        </attribute>
        <layout class="QGridLayout" name="gridLayout_7">
         <item row="0" column="0">
-         <widget class="QGraphicsView" name="connectionsPanel"/>
+         <widget class="QFrame" name="nodeEditorPlaceHolder">
+          <property name="styleSheet">
+           <string notr="true">QFrame
+{
+	border: none;
+}
+</string>
+          </property>
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_9"/>
+         </widget>
         </item>
        </layout>
       </widget>
