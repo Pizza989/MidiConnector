@@ -3,11 +3,11 @@ import subprocess
 import typing
 from typing import List
 
-from PyQt5.QtCore import QLine, Qt, QEvent, QRectF, QRect
-from PyQt5.QtGui import QColor, QPen, QMouseEvent, QPainter, QPainterPath, QFont, QBrush
+from PyQt5.QtCore import QLine, Qt, QEvent, QRectF, QRect, QPointF
+from PyQt5.QtGui import QColor, QPen, QMouseEvent, QPainter, QPainterPath, QFont, QBrush, QFocusEvent
 from PyQt5.QtWidgets import QWidget, QListWidgetItem, QGraphicsItem, QGraphicsScene, QGraphicsView, \
     QFrame, QVBoxLayout, QGraphicsTextItem, QStyleOptionGraphicsItem, \
-    QGraphicsProxyWidget, QLabel, QHBoxLayout, QSizePolicy, QRadioButton, QSpacerItem
+    QGraphicsProxyWidget, QLabel, QHBoxLayout, QSizePolicy, QRadioButton, QSpacerItem, QGraphicsSceneMouseEvent
 from PyQt5.uic.Compiler.qtproxies import QtGui
 
 
@@ -120,7 +120,6 @@ class MidiDevice:
 class QDMNodeEditor(QGraphicsView):
     def __init__(self, place_holder: QFrame, node_scene: "QDMNodeEditorScene", main_class):
         super().__init__()
-        place_holder.setLayout(QVBoxLayout())
         place_holder.layout().addWidget(self)
 
         self.scene = node_scene
@@ -267,15 +266,14 @@ class QDMGraphicsSocket(QGraphicsItem):
 
 
 class QDMChannelWidget(QWidget):
-    def __init__(self, x, y, width, height, channel, node: "Node"):
+    def __init__(self, channel, node: "Node"):
         super().__init__()
-        super().setStyleSheet("background-color: transparent;")
 
         self.channel = channel
         self.node = node
 
         self.setLayout(QHBoxLayout())
-
+        print(self.node.width)
         self.text: QLabel = QLabel(f"{self.channel[0]}: {self.channel[1]}")
         self.text.setFont(QFont("Ubuntu", 10))
         self.text.setGeometry(self.node.width, self.node.channel_height, 0, 0)
@@ -283,23 +281,31 @@ class QDMChannelWidget(QWidget):
         self.layout().setContentsMargins(0, 0, 0, 0)
         self.layout().addWidget(self.text)
 
-        self.spacer = QSpacerItem(1, QSizePolicy.MinimumExpanding)
+        self.spacer = QSpacerItem(20, 20, QSizePolicy.MinimumExpanding, QSizePolicy.Maximum)
         self.layout().addItem(self.spacer)
-        self.socket_button = QRadioButton()
 
+        self.socket_button = QRadioButton()
         self.layout().addWidget(self.socket_button)
 
-        self.setGeometry(x, y, width, height)
+        self.setStyleSheet("QRadioButton{ background-color: " + self.node.bg_color + "; }")
+        self.setMaximumWidth(self.node.width - 10)
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        self.node.setZValue(1)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        self.node.setZValue(-1)
 
 
 class QDMNodeContentWidget(QWidget):
     def __init__(self, node: "Node"):
         super().__init__()
-        super().setStyleSheet("background-color: transparent")
 
         self.node = node
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(0, 0, 0, 0)
+
+        self.setStyleSheet("QWidget{ background-color: transparent; }")
 
         self.init_ui()
 
@@ -308,25 +314,23 @@ class QDMNodeContentWidget(QWidget):
         for _each in self.node.device.channels:
             _y = _i * self.node.channel_height + self.node.title_height
             self.layout().addWidget(
-                QDMChannelWidget(self.node.padding, self.node.padding + _i * self.node.channel_height, self.node.width,
-                                 _y,
-                                 _each, self.node))
+                QDMChannelWidget(_each, self.node))
             _i += 1
 
 
 class Node(QGraphicsItem):
-    def __init__(self, device: MidiDevice, parent: QDMNodeEditor):
+    def __init__(self, device: MidiDevice, parent: QDMNodeEditor, pos=None):
         super().__init__()
+
+        if pos is None:
+            pos = QPointF(0, 0)
 
         self._title_color = Qt.white
         self._title_font = QFont("Ubuntu", 10)
 
-        # Will be dynamically set in paint method
-        self.width = 0
-        self.height = 0
         self.base_width = 180
         self.base_height = 25
-        self.channel_height = 25
+        self.channel_height = 35
         self.edge_size = 10.0
         self.title_height = 24.0
         self.padding = 4.0
@@ -335,7 +339,8 @@ class Node(QGraphicsItem):
         self._pen_selected = QPen(QColor("#999999"))
 
         self._brush_title = QBrush(QColor("#FF313131"))
-        self._brush_background = QBrush(QColor("#E3212121"))
+        self.bg_color = "#E3212121"
+        self._brush_background = QBrush(QColor(self.bg_color))
 
         self.title = QGraphicsTextItem(self)
         self.channels_text_objects = []
@@ -345,27 +350,41 @@ class Node(QGraphicsItem):
         self.device = device
         self.parent = parent
 
+        self.height = len(self.device.channels) * self.channel_height + self.base_height
+        self.width = self.title.textWidth() + self.padding + self.base_width
+
         self.init_title()
         self.init_contents()
 
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsFocusable)
+        self.setPos(pos.x(), pos.y())
+
+    def remove(self):
+        self.parent.main_class.nodes.remove(self)
+        self.parent.scene.removeItem(self)
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if event.key() == Qt.Key_Delete:
+            self.remove()
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        self.setZValue(1)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        self.setZValue(-1)
 
     def boundingRect(self):
         return QRectF(
             0,
             0,
-            2 * self.edge_size + self.width,
-            2 * self.edge_size + self.height
+            self.width,
+            self.height
         ).normalized()
 
     def init_title(self):
         self.title.setDefaultTextColor(self._title_color)
         self.title.setFont(self._title_font)
         self.title.setPos(self.padding, 0)
-        self.title.setTextWidth(
-            self.width
-            - 2 * self.padding
-        )
         self.title.setPlainText(f"{self.device.name} - {self.device.type}")
 
     def init_contents(self):

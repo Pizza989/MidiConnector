@@ -3,13 +3,8 @@ QListView::item
 	height: 42px;
 }
 
-QLabel
+QFrame.utils.QDMChannelWidget
 {
-    background-color: transparent;
-    color: rgb(255, 0, 0);
+    background-color: blue;
 }
-QLabel:hover
-{
-    background-color: rgb(25, 25, 25);
 
-}
